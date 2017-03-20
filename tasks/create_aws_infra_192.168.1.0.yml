@@ -1,0 +1,102 @@
+---
+# tasks file for aws_infra_192.168.1.0
+- name: create key pair
+  ec2_key:
+    name: "{{ key_name }}"
+    state: present
+    region: "{{ region }}"
+    key_material: "{{ item }}"
+  with_file: "{{ ssh_pub_key }}"
+
+- name: create DHCP options
+  ec2_vpc_dhcp_options:
+    domain_name: "{{ domain_name }}"
+    dns_servers:
+      - "{{ dns_servers }}"
+    region: "{{ region }}"
+    tags:
+      Name: "{{ dhcp_name }}"
+
+- name: gather dhcp option facts
+  ec2_vpc_dhcp_options_facts:
+    region: "{{ region }}"
+    filters:
+      "tag:Name": "{{ dhcp_name }}"
+  register: dhcp_facts
+
+- name: create VPC
+  ec2_vpc_net:
+    name: "{{ vpc_name }}"
+    cidr_block: "{{ cidr_block }}"
+    region: "{{ region }}"
+    state: present
+    dhcp_opts_id: "{{ dhcp_facts['dhcp_options'][0]['dhcp_options_id'] }}"
+
+- name: gather VPC ID
+  ec2_vpc_net_facts:
+    region: "{{ region }}"
+    filters:
+      "tag:Name": "{{ vpc_name }}"
+  register: vpcid_facts
+
+
+# This might also attaches gateway to vpc
+- name: create Internet Gateway
+  ec2_vpc_igw:
+    region: "{{ region }}"
+    vpc_id: "{{ vpcid_facts.vpcs[0].id }}"
+  register: igw_facts
+
+- name: gather route table ID
+  ec2_vpc_route_table_facts:
+    region: "{{ region }}"
+    filters:
+      vpc-id: "{{ vpcid_facts.vpcs[0].id }}"
+  register: route_id_fact
+
+- name: create route
+  ec2_vpc_route_table:
+    lookup: id
+    route_table_id: "{{ route_id_fact['route_tables'][0]['id']}}"
+    vpc_id: "{{ vpcid_facts.vpcs[0].id }}"
+    region: "{{ region }}"
+    routes:
+      - dest: "{{ route_dest }}"
+        gateway_id: "{{ igw_facts['gateway_id'] }}"
+    tags:
+      Name: "{{ route_name }}"
+
+- name: create VPC subnet
+  ec2_vpc_subnet:
+    state: present
+    region: "{{ region }}"
+    vpc_id: "{{ vpcid_facts.vpcs[0].id }}"
+    cidr: "{{ vpc_subnet_cidr }}"
+    resource_tags:
+      Name: "{{ vpc_subnet_name }}"
+
+- name: gather VPC subnet facts
+  ec2_vpc_subnet_facts:
+    region: "{{ region }}"
+    filters:
+      "tag:Name": "{{ vpc_subnet_name }}"
+  register: vpc_subnetid_facts
+
+- name: get my public IP
+  ipify_facts:
+    api_url: https://api.ipify.org
+  register: cidr_ip_facts
+
+- name: create Security Group
+  ec2_group:
+    name: "{{ sec_group_name }}"
+    description: Open SSH ports
+    state: present
+    region: "{{ region }}"
+    vpc_id: "{{ vpcid_facts.vpcs[0].id }}"
+    rules:
+      - proto: tcp
+        from_port: "{{ ssh_from_port }}"
+        to_port: "{{ ssh_to_port }}"
+        cidr_ip: "{{ cidr_ip_facts['ansible_facts']['ipify_public_ip'] }}/32"
+  register: groupid_facts

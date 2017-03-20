@@ -1,0 +1,23 @@
+---
+# defaults file for aws_infra_192.168.1.0
+network: 192.168.1.0
+key_name: Ansible_Key
+region: us-east-1
+ssh_pub_key: ~/.ssh/awskey.pub
+domain_name: ec2.internal
+dns_servers: AmazonProvidedDNS
+dhcp_name: "dhcp_{{ network }}"
+vpc_name: "vpc_{{ network }}"
+cidr_block: "{{ network }}/24"
+route_dest: 0.0.0.0/0
+route_name: "route_{{ network }}"
+vpc_subnet_cidr: "{{ network }}/25"
+vpc_subnet_name: "vpc_subnet_{{ network }}"
+sec_group_name: AnsSecGroup
+ssh_from_port: 22
+ssh_to_port: 22
+instance_type: t2.micro
+image_id: ami-0b33d91d
+ec2_hosts:
+  - host1
+  #- host2
