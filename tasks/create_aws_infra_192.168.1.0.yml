@@ -39,8 +39,6 @@
       "tag:Name": "{{ vpc_name }}"
   register: vpcid_facts
 
-
-# This might also attaches gateway to vpc
 - name: create Internet Gateway
   ec2_vpc_igw:
     region: "{{ region }}"
